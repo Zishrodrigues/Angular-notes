@@ -1,4 +1,4 @@
-# Angular Course notes
+# Angular notes
 
 ## SECTION 1: INTRODUCTION
 
@@ -682,4 +682,76 @@ this.route.params
   ```
   * Observables like this are handy if updates might occur without the component being reinitiated, therefor not able to us ngOnInit
   * Angular cleans up the subscriptions in the component when the component is destroyed
-  * With your own observables it is important to unsubscribe OnDestroy() to make
+  * With your own observables it is important to unsubscribe OnDestroy()
+
+### Query parameters and fragments
+
+* Query parameters are parameters seperated by a questionmark(?) `localhost:4200/users/10/johnny?mode=editing&yes#loading` These are query parameters
+
+#### Pass Query parameters and fragments
+
+* `[queryParams]="{}"` is a bindable property of the RouterLink directive
+* `[queryParams]="{allowEdit: '1'}"` This will add `?allowEdit=1` after the url, it can be used to set rights etc
+* `fragment="loading"` fragments allow you to add a # behind your url, now after the url a `#loading` will be appended
+* You can create such url's in your Typescript file:
+```
+(click)="onLoadServers(1)"
+```
+```
+onLoadServers(id: number) {
+    // complex calculation or so
+    this.router.navigate(['/servers', id, 'edit'], {queryParams: {allowEdit: '1'}, fragment: 'loading'});
+}
+```
+This creates `http://localhost:4200/servers/1/edit?allowEdit=1#loading` as url
+
+#### Retrieve Query parameters and fragments
+
+* You need to inject/import Activatedrouter to retrieve Query parameters and the fragment
+```
+import { ActivatedRoute } from '@angular/router';
+```
+```
+constructor(private serversService: ServersService,
+  private route: ActivatedRoute) { }
+```
+* This is a way to retreive them:
+```
+console.log(this.route.snapshot.queryParams);
+console.log(this.route.snapshot.fragment);
+```
+This approach only happens when the component is first initialized, so not useable if you change the url after that
+```
+this.route.queryParams.subscribe();
+this.route.fragment.subscribe();
+```
+This let's you subscribe to the queryParams and fragment, making sure you can react to a change
+
+#### Common gotchas/errors
+
+* Dynamically adding a link:
+```
+<a
+  [routerLink]="['/users', user.id, user.name]"
+  href="#"
+  class="list-group-item"
+  *ngFor="let user of users">
+  {{ user.name }}
+</a>
+```
+
+* Getting the parameter id from the url, converting it to a number and calling a method from the serversService with the id:
+```
+ngOnInit() {
+  const id = +this.route.snapshot.params['id'];
+  this.server = this.serversService.getServer(id);
+  this.route.params
+      .subscribe(
+          (params: Params) => {
+              this.server = this.serversService.getServer(+params['id']);
+          }
+      );
+}
+```
+
+### Child (nested) Routes
