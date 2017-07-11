@@ -755,3 +755,261 @@ ngOnInit() {
 ```
 
 ### Child (nested) Routes
+
+* You can declare routes neater instead of using duplicates by using child Routes
+normal:
+```
+const appRoutes: Routes = [
+    { path: '', component: HomeComponent }, //localhost:4200/users
+    { path: 'users', component: UsersComponent },
+    { path: 'users/:id/:name', component: UserComponent },
+    { path: 'servers', component: ServersComponent },
+    { path: 'servers/:id', component: ServerComponent },
+    { path: 'servers/:id/edit', component: EditServerComponent }
+];
+```
+child routes:
+```
+const appRoutes: Routes = [
+    { path: '', component: HomeComponent }, //localhost:4200/users
+    { path: 'users', component: UsersComponent, children: [
+        { path: ':id/:name', component: UserComponent }
+    ] },
+    { path: 'servers', component: ServersComponent, children: [
+        { path: ':id', component: ServerComponent },
+        { path: ':id/edit', component: EditServerComponent }
+    ] },
+];
+```
+* Use `<router-outlet></router-outlet>` in your HTML template, child routes will be loaded here
+* If you use routing to switch data/views without recreating the component it's important to subscribe to changes in the url parameters
+* This code adds /edit to your path relatively to where you are when called:
+```
+onEdit() {
+    this.router.navigate(['edit'], {relativeTo: this.route, queryParamsHandling: 'preserve'});
+}
+```
+
+### Rights based on Query example
+
+HTML for the clickable link:
+```
+<a
+  [routerLink]="['/servers', server.id]"
+  [queryParams]="{allowEdit: server.id === 3 ? '1' : '0'}"
+  fragment="loading"
+  href="#"
+  class="list-group-item"
+  *ngFor="let server of servers">
+  {{ server.name }}
+</a>
+```
+Subscribing to the route change and checking state of allowEdit
+```
+allowEdit = false;
+this.route.queryParams
+    .subscribe(
+        (queryParams: Params) => {
+            this.allowEdit = queryParams['allowEdit'] === '1' ? true : false;
+        }
+    );
+```
+Using ngIf to render the correct view
+```
+<h4 *ngIf="!allowEdit">You're not allowed to edit</h4>
+<div *ngIf="allowEdit">
+    edit form here
+</div>
+```
+### Configuring / preserving Query parameters when clicking a link
+
+#### queryParamsHandling property
+
+* queryParamsHandling takes a string as a value and you can do things with it
+* You can use merge to merge old parameters with new ones ` this.router.navigate(['edit'], {relativeTo: this.route, queryParamsHandling: 'merge'});`
+* You can preserve old query parameters ` this.router.navigate(['edit'], {relativeTo: this.route, queryParamsHandling: 'preserve'});`
+
+### 404 error handeling/redirecting
+
+#### Redirecting
+
+* Instead of a component you can enter a redirect url:
+```
+{ path: 'not-found', component: PageNotFoundComponent},
+{ path: '**', redirectTo: '/not-found', pathMatch: 'full'}
+```
+If you go to `/not-existing-url` it will redirect to `/not-found` (** = wild card route)
+* The re-direct url has to be the last Route in your array of Routes (routes get parsed from top to bottom)
+
+### Route module
+
+* When you have multiple routes it's good to use a seperate module for it `app-routing.module.ts`
+* Example of a router module:
+```
+import { NgModule } from '@angular/core';
+import { Routes, RouterModule } from '@angular/router';
+
+import { HomeComponent } from './home/home.component';
+import { UsersComponent } from './users/users.component';
+import { ServersComponent } from './servers/servers.component';
+import { UserComponent } from './users/user/user.component';
+import { EditServerComponent } from './servers/edit-server/edit-server.component';
+import { ServerComponent } from './servers/server/server.component';
+import { PageNotFoundComponent } from './page-not-found/page-not-found.component';
+
+const appRoutes: Routes = [
+    { path: '', component: HomeComponent }, //localhost:4200/users
+    { path: 'users', component: UsersComponent, children: [
+        { path: ':id/:name', component: UserComponent }
+    ] },
+    { path: 'servers', component: ServersComponent, children: [
+        { path: ':id', component: ServerComponent },
+        { path: ':id/edit', component: EditServerComponent }
+    ] },
+    { path: 'not-found', component: PageNotFoundComponent},
+    { path: '**', redirectTo: '/not-found', pathMatch: 'full'}
+];
+
+@NgModule({
+    imports: [
+        RouterModule.forRoot(appRoutes)
+    ],
+    exports: [RouterModule]
+})
+export class AppRoutingModule {
+
+}
+```
+It has to be imported to your main app module, add `AppRoutingModule` in the imports array and import the class `import { AppRoutingModule } from './app-routing.module';`
+
+### Route Guards (protecting routes)
+
+* Route Guards are functionality/logic/code which is executed before a route is loaded or once you want to leave a router
+* For example checking if a user is logged in before giving them access to a specific route
+
+#### canActivate guard
+
+* Guards are services, they are a specific feature to guard routes but in the end you set them up like you would a service `auth-guard.service.ts`
+* In the routes module you need to define which routes are protected by a specific guard:
+```
+import { AuthGuard } from './auth-guard.service';
+
+{ path: 'servers', canActivate: [AuthGuard], component: ServersComponent, children: [
+    { path: ':id', component: ServerComponent },
+    { path: ':id/edit', component: EditServerComponent }
+] }
+```
+The services need to be declared in your main app module `providers: [ServersService, AuthService, AuthGuard],`
+
+* Guard service example:
+```
+import {
+    CanActivate,
+    ActivatedRouteSnapshot,
+    RouterStateSnapshot,
+    Router
+} from '@angular/router';
+import { Observable } from 'rxjs/Observable';
+import { Injectable } from '@angular/core';
+
+import { AuthService } from './auth.service';
+
+@Injectable()
+export class AuthGuard implements CanActivate {
+    constructor(private authService: AuthService, private router: Router) {}
+
+    canActivate(route: ActivatedRouteSnapshot,
+                state: RouterStateSnapshot): Observable<boolean> | Promise<boolean> | boolean {
+        return this.authService.isAuthenticated()
+            .then(
+                (authenticated: boolean) => {
+                    if (authenticated) {
+                        return true;
+                    } else {
+                        this.router.navigate(['/']);
+                    }
+                }
+            );
+    }
+}
+```
+
+##### Protecting child (nested) routes with canActivate
+
+* Adding the CanActivateChild interface in the guard allows you to use it in your Routes
+```
+canActivateChild(route: ActivatedRouteSnapshot,
+            state: RouterStateSnapshot): Observable<boolean> | Promise<boolean> | boolean {
+    return this.canActivate(route, state);
+}
+```
+Now you can use `canActivateChild: [AuthGuard],` instead of just canActivate to protect the child Routes
+
+#### canDeactivate guard
+
+* canDeactivate contols wether you are allowed to leave a route or not
+* An interface is a contract which can be imported by some other class and forces that class to provide some logic:
+```
+import { Observable } from 'rxjs/Observable';
+import { CanDeactivate, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
+
+export interface CanComponentDeactivate {
+    canDeactivate: () => Observable<boolean> | Promise<boolean> | boolean;
+}
+
+export class canDeactivateGuard implements CanDeactivate<CanComponentDeactivate> {
+
+    canDeactivate(component: CanComponentDeactivate,
+        currentRoute: ActivatedRouteSnapshot,
+        currentState: RouterStateSnapshot,
+        nextState?: RouterStateSnapshot): Observable<boolean> | Promise<boolean> | boolean {
+            return component.canDeactivate();
+        }
+}
+```
+Now if you call canDeactivate from a component, you're sure it has the logic of the interface which it needs to pass the right component
+
+#### Passing data to a route (once it is loaded)
+
+* If you have a dynamic error message page, for example route is not found, you need to be able to pass that data
+##### Passing static data to a route
+```
+ngOnInit() {
+  //   this.errorMessage = this.route.snapshot.data['message'];
+    this.route.data.subscribe(
+        (data: Data) => {
+            this.errorMessage = data['message'];
+        }
+    );
+}
+```
+and in your router module:
+```
+{ path: 'not-found', component: ErrorPageComponent, data: {message: 'Page not found!'}},
+```
+##### Passing dynamic data to a route (resolve Guard)
+
+* The resolver Guard will not decide whether the component should be loaded or not, it will always render the component. It will do some preloading, fetch some data the component will need
+* This is for loading data before you display a route
+Route module:
+```
+{ path: ':id', component: ServerComponent, resolve: {server: ServerResolver} }
+```
+Component Typescript:
+```
+ngOnInit() {
+    this.route.data
+      .subscribe(
+          (data: Data) => {
+              this.server = data['server'];
+          }
+      );
+}
+```
+### Location strategies / route fallback
+
+* On a live app the url is always handled by the server first, so the local url's you set up might not work out of the box
+* The server has to be set up in a way that in case of a 404, the server returns the index file, the file holding the Angular app
+* The server looks for files that matches the url, but you only have 1 file; your index.html which contains your angular app
+* For older browsers you can fallback to using a # hash as url instead of / dash `RouterModule.forRoot(appRoutes, {useHash: true})`
+* The Default for `RouterModule.forRoot(appRoutes, {useHash: true})` is false
