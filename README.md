@@ -789,6 +789,10 @@ onEdit() {
     this.router.navigate(['edit'], {relativeTo: this.route, queryParamsHandling: 'preserve'});
 }
 ```
+More complex routing (going back):
+```
+this.router.navigate(['../', this.id, 'edit'], {relativeTo: this.route}
+```
 
 ### Rights based on Query example
 
@@ -1013,3 +1017,714 @@ ngOnInit() {
 * The server looks for files that matches the url, but you only have 1 file; your index.html which contains your angular app
 * For older browsers you can fallback to using a # hash as url instead of / dash `RouterModule.forRoot(appRoutes, {useHash: true})`
 * The Default for `RouterModule.forRoot(appRoutes, {useHash: true})` is false
+
+## Section 13: Observables
+
+* An Observable can be thought of as a data source
+* You have an Observable and an observer, and in between there is a stream/timeline. In this timeline there can be multiple events emitted by the observable or 'data packages'
+* So the observable can emit data because you trigger it to do so programmatically, it can be connected to a button (user input) or an http request etc
+* The observer is your code (the subscribe function). You have three ways to handle data. 1) Handle data normally 2) Handle error 3) handle completion
+* Those are the 3 types of data packages you can receive (data,error,completion)
+* In these hooks/boxes your code gets executed. You can define what happens in each situation. (An observable doesn't have to complete)
+* You use it to handle a sync tasks because user inputs, https request etc are async tasks. You don't know when they will happen or how long they will take
+* So instead of waiting for the completion for these events(thus blocking your code) we continue in our file and use Observables to keep an eye on when something happens
+* Observables are operators, giving them a major advantage over callbacks
+* So the Observable might emit a normal data package, it might emit an error or a completion, and the respective code will be executed
+
+### Built-in Angular observables
+
+* Params is an observables Angular has to check parameter changes in your url, thus giving you a change to react to these changes
+* Here you use params to check for a change in the url, and then update the id:
+```
+id: number;
+ngOnInit() {
+  this.route.params
+    .subscribe(
+      (params: Params) => {
+        this.id = +params['id'];
+      }
+    );
+}
+```
+This is the receiving(observer part/ subscriber) part, here we handle the data and react accordingly
+
+### Custom/own Observables
+
+* To create your own Observables you need to import:
+```
+import { Observable } from 'rxjs/Observable';
+import 'rxjs/Rx';
+```
+
+* This is an Observable that emits a number every second and an observer that logs it:
+```
+const myNumbers = Observable.interval(1000);
+myNumbers.subscribe(
+    (number: number) => {
+        console.log(number);
+    }
+);
+```
+* `.create` create takes an argument and this function should hold your async code
+* An custom Observable and Observer:
+```
+const myObservable = Observable.create((observer: Observer<string>) => {
+    setTimeout(() => {
+        observer.next('first package');
+    }, 2000);
+    setTimeout(() => {
+        observer.next('second package');
+    }, 4000);
+    setTimeout(() => {
+        // observer.error('error package');
+        observer.complete();
+    }, 5000);
+});
+myObservable.subscribe(
+    (data: string) => { console.log(data); },
+    (error: string) => { console.log(error); },
+    () => { console.log('completed'); }
+);
+```
+
+### Unsubscribe
+
+* If an observable isn't completed automatically and keeps going, and you keep being subscribed then it can create bugs after the component is destroyed (leaving page etc)
+* Angular unsubscribes automatically from it's own Observables (params) but you have to do this for custom observables
+* You need to use onDestroy for this:
+```
+import { Component, OnInit, OnDestroy } from '@angular/core';
+```
+```
+export class HomeComponent implements OnInit, OnDestroy {
+```
+```
+ngOnDestroy() {
+
+}
+```
+* To unsubscribe you create a var where you hold your sub, then destroy it:
+```
+customObsSubscription: Subscription;
+```
+```
+this.customObsSubscription = myObservable.subscribe(
+    (data: string) => { console.log(data); },
+    (error: string) => { console.log(error); },
+    () => { console.log('completed'); }
+);
+```
+```
+ngOnDestroy() {
+    this.customObsSubscription.unsubscribe();
+}
+```
+
+### More about Observables
+
+* [RxJS](www.reactivex.io)
+* www.reactivex.io (RxJS)
+
+### Subject
+
+* A subject is like an observable but it allows you to conveniently push it to emit new data during your code
+* A subject is observable and observer at the same time
+* It's good practice to use a subject instead of event emitter for cross component communication
+```
+onActivate() {
+    this.usersService.userActivated.next(this.id);
+}
+```
+```
+this.usersService.userActivated.subscribe(
+    (id: number) => {
+        if (id === 1) {
+            this.user1Activated = true;
+        } else if (id === 2) {
+            this.user2Activated = true;
+        }
+    }
+);
+```
+
+### Observable operators
+
+* RXJS Operators allow you to transform the data you receive to something else, and still stay inside the observable
+* Import `import 'rxjs/Rx';` to unlock operators
+* This is the Operator `.map` which transforms/maps data into something else:
+```
+const myNumbers = Observable.interval(1000)
+  .map(
+      (data: number) => {
+          return data * 2;
+      }
+  );
+```
+
+## Section 15: Handeling Forms in Angular apps
+
+* Because Angular is a one page app there is no submitting to the server like you normally would. Instead you will need to handle the form through Angular
+* You can reach out through Angulars HTTP service to the server for form submitting
+* Angular allows you to get and check values for forms, validation etc
+* Angular gives you a Javascript object representation of your form, making it simple to retrieve user values and work with them
+* Angular offers 2 approaches to handle forms. Template driven and reactive
+
+### Template driven forms introduction
+
+* You set up your form in the HTML template and Angular will automatically infer the structure of your form (which controls, inputs etc)
+* Angular infers the Form Object from the DOM
+
+### Reactive forms introduction
+
+* Here you define the structure of the form in Typescript code, you also set up the HTML code and you manually connect these. Gives you greater control and fine tuning
+* Form is created programmatically and synchronized with the DOM
+
+### Template driven forms
+
+* The <form> element doesn't have an action, submit. You don't want it to submit when clicked. Instead Angular should handle the form
+
+#### Creating the form and registering the controls
+
+* Make sure you import the form module `import { FormsModule } from '@angular/forms';` and have it as import:
+```
+imports: [
+  BrowserModule,
+  FormsModule,
+  HttpModule
+],
+```
+* When Angular detecs a <form> element in the HTML code it will automatically create a javascript representation of the form
+* So the <form> element serves as a selector for a directive which creates the javascript form object for you
+* Angular will not automatically detect your inputs in your form, you might not want every input in your javascript form object (dropdown etc)
+* You need to register controls manually, tell Angular what to represent in Javascript
+* With ngModel you can tell Angular that this input is a control, the `name=""` tells Angular the name of the input:
+```
+<label for="username">Username</label>
+<input
+    type="text"
+    id="username"
+    class="form-control"
+    ngModel
+    name="username">
+```
+* To submit a form you add `(ngSubmit)=""` to the form and call a method:
+```
+      <form (ngSubmit)="onSubmit(f)" #f="ngForm">
+```
+The method can be in your TS file, `#f="ngForm"` is the reference to the js form Angular created
+```
+onSubmit(form: HTMLFormElement) {
+    console.log(form)
+}
+```
+* The JS form object has a lot of properties which give you information about the form (disabled, enabled, errors etc)
+
+##### Accessing the form with @ViewChild
+
+* `@ViewChild('f') signupForm: NgForm;` lets you store the form object
+```
+onSubmit() {
+    console.log(this.signupForm);
+}
+```
+* This is useful if you need to access the form not only at the time of submit, but also earlier
+
+##### Controlling the validity of the form (validation)
+
+* Validation should always also happen on the server, but you can enhance UX by also implementing it in the frontend
+* `required` is a HTML attribute you can add to a input, Angular however will detect it and will automatically configure the form to make sure that the input is invalid if empty
+* Same goes for email, but you also have the `email` attribute (not vanilla HTML, Angular directive):
+```
+<input
+    type="email"
+    id="email"
+    class="form-control"
+    ngModel
+    name="email"
+    required
+    email>
+```
+* In the `valid` property of the form object you can see if the form is validated or not (true/false)
+* This is not only true on form level, but also per control level (you can see specifically if the email is valid or not)
+* Angular adds classes on input. `ng-valid ng-dirty ng-touched` these classes give us information about the state of the individual controls
+* https://angular.io/docs/ts/latest/api/forms/index/Validators-class.html are the built in validators that ship with angular
+* https://angular.io/api?type=directive See the needed directives
+* You might want to enable HTML 5 validation, Angular enables it. You enable this by adding `ngNativeValidate` to a control in your HTML template
+
+* You can disable the submit button if the form is invalid by accessing the local reference:
+```
+<button
+    class="btn btn-primary"
+    type="submit"
+    [disabled]="!f.valid">Submit</button>
+```
+* You can style the addes css classes to give feedback to the user on validation:
+```
+input.ng-invalid.ng-touched {
+    border: 1px red solid;
+}
+```
+
+###### Displaying error messages/help
+
+* Using local references you can determine if an input is invalid and display an error message accordingly:
+```
+<div class="form-group">
+  <label for="email">Mail</label>
+  <input
+      type="email"
+      id="email"
+      class="form-control"
+      ngModel
+      name="email"
+      required
+      email
+      #email="ngModel">
+      <span class="help-block" *ngIf="!email.valid && email.touched">Please enter a valid email!</span>
+</div>
+```
+
+##### Setting default values with ngModel / property binding (one-way)
+
+* In your Typescript file:
+```
+  defaultQuestion = 'pet';
+```
+in the html:
+```
+<select
+    id="secret"
+    class="form-control"
+    [ngModel]="defaultQuestion"
+    name="secret">
+  <option value="pet">Your first Pet?</option>
+  <option value="teacher">Your first teacher?</option>
+</select>
+```
+Now the default selected value is "Your first pet?"
+* This would work for the username etc
+
+###### Two-way binding in forms
+
+* If you want to instantly check something or repeat what the user entered
+* Typescript file: `answer = '';`
+HTML:
+```
+<div class="form-group">
+    <textarea
+        name="questionAnswer"
+        rows="3"
+        class="form-control"
+        [(ngModel)]="answer">
+        </textarea>
+</div>
+<p>Your reply: {{ answer }}</p>
+```
+
+##### Grouping form Controls
+
+* You might want to group form controls to create structure in your form object, grouping certain values
+* You could then validate individual groups
+* Using `ngModelGroup` you can group form controls, you need to give it a name like userData `ngModelGroup="userData"`
+* You can show an error message for this group:
+```
+<div
+    id="user-data"
+    ngModelGroup="userData"
+    #userData="ngModelGroup">
+```
+```
+<p *ngIf="!userData.valid && userData.touched">User Data is invalid!</p
+```
+##### Handeling radio buttons
+
+* Create a genders array in your TS file `genders = ['male', 'female'];`
+HTML:
+```
+<div class="radio" *ngFor="let gender of genders">
+    <label>
+        <input
+            type="radio"
+            name="gender"
+            ngModel
+            [value]="gender"
+            required>
+            {{ gender }}
+    </label>
+</div>
+```
+
+##### Setting and patching form values
+
+TS:
+```
+suggestUserName() {
+  const suggestedName = 'Superuser';
+  this.signupForm.setValue({
+      userData: {
+          username: suggestedName,
+          email: ''
+      },
+      secret: 'pet',
+      questionAnswer: '',
+      gender: 'male'
+  });
+}
+```
+HTML:
+```
+<button
+    class="btn btn-default"
+    type="button"
+    (click)="suggestUserName()">Suggest an Username</button>
+```
+On click the value of Username will be Superuser, however this will reset the other fields. This is for a specific input:
+```
+suggestUserName() {
+
+  this.signupForm.form.patchValue({
+      userData: {
+          username: suggestedName
+      }
+  });
+}
+```
+`PatchValue()` is only available on the form wrapped by ngForm itself
+
+#### Using form data (extracting data and using it)
+
+* Showing the data from your form:
+Typescript:
+```
+user = {
+    username: '',
+    email: '',
+    secretQuestion: '',
+    answer: '',
+    gender: ''
+};
+submitted = false;
+```
+```
+onSubmit() {
+    this.submitted = true;
+    this.user.username = this.signupForm.value.userData.username;
+    this.user.email = this.signupForm.value.userData.email;
+    this.user.secretQuestion = this.signupForm.value.secret;
+    this.user.answer = this.signupForm.value.questionAnswer;
+    this.user.gender = this.signupForm.value.gender;
+}
+```
+HTML:
+```
+<div class="row" *ngIf="submitted">
+    <div class="col-xs-12">
+    <h3>Your data</h3>
+    <p>Username: {{ user.username }}</p>
+    <p>Mail: {{ user.email }}</p>
+    <p>Secret Question: {{ user.secretQuestion }}</p>
+    <p>Answer: {{ user.answer }}</p>
+    <p>Gender: {{ user.gender }} </p>
+    </div>
+</div>
+```
+
+#### Resetting forms
+
+* You can reset the form using `this.signupForm.reset();`
+* This will not only reset the values, but also the states (valid, touched etc) as if the page was reloaded
+
+### Reactive forms
+
+* In the reactive approach the form is created programmaticaly, in Typescript code
+* To setup a form you need to import form group `import { FormGroup } from '@angular/forms';` and setup a form property `signupForm: FormGroup;`
+* In your app.module you need to import the ReactiveFormsModule which contains the needed tools `import { ReactiveFormsModule } from '@angular/forms';`
+```
+imports: [
+  BrowserModule,
+  ReactiveFormsModule,
+  HttpModule
+]
+```
+
+#### creating a reactive form in code
+
+* Initialize the form before the template is rendered using a lifecycle hook (ngOnInit):
+```
+signupForm: FormGroup;
+
+ngOnInit() {
+    this.signupForm = new FormGroup({
+
+    });
+}
+```
+This is a basic empty form with no controls
+
+* Controls are key value pairs we pass to the overal control `FormGroup`
+* Form:
+HTML:
+```
+<form>
+  <div class="form-group">
+    <label for="username">Username</label>
+    <input
+      type="text"
+      id="username"
+      class="form-control">
+  </div>
+  <div class="form-group">
+    <label for="email">email</label>
+    <input
+      type="text"
+      id="email"
+      class="form-control">
+  </div>
+  <div class="radio" *ngFor="let gender of genders">
+    <label>
+      <input
+        type="radio"
+        [value]="gender">{{ gender }}
+    </label>
+  </div>
+  <button class="btn btn-primary" type="submit">Submit</button>
+</form>
+```
+Typescript:
+```
+signupForm: FormGroup;
+
+ngOnInit() {
+    this.signupForm = new FormGroup({
+        'username': new FormControl(null),
+        'email': new FormControl(null),
+        'gender': new FormControl('male')
+    });
+}
+```
+
+##### Syncing HTML and Form object
+
+* Using `[formGroup]="signupForm"` you tell Angular not to create a form by itself, but use your set up form `<form [formGroup]="signupForm">`
+* With `formControlName=""` you can tell Angular what the name of the control in your typescript form is:
+```
+<input
+  type="text"
+  id="username"
+  formControlName="username"
+  class="form-control">
+```
+
+##### Submitting the forms
+
+* `<form [formGroup]="signupForm" (ngSubmit)="onSubmit()">` This adds a submit method
+Typescript:
+```
+onSubmit() {
+    console.log(this.signupForm);
+}
+```
+
+##### Reactive form validation
+
+* You don't configure the form in the template, you only sync it to your TS code
+* You can configure the validators in the TS object:
+```
+ngOnInit() {
+    this.signupForm = new FormGroup({
+        'username': new FormControl(null, Validators.required),
+        'email': new FormControl(null, [Validators.required, Validators.email]),
+        'gender': new FormControl('male')
+    });
+}
+```
+
+* Using `get()` you can set a validation/help message, by getting access to a control in your form:
+```
+<input
+  type="text"
+  id="username"
+  formControlName="username"
+  class="form-control">
+<span
+    class="help-block"
+    *ngIf="!signupForm.get('username').valid && signupForm.get('username').touched">Please enter a valid username!</span>
+```
+General form message:
+```
+<span
+    class="help-block"
+    *ngIf="!signupForm.valid && signupForm.touched">Please enter a valid data!</span>
+```
+
+* Css classes for validation just work (ng-touched, ng-valid etc)
+
+##### Grouping controls in reactive forms
+
+* You can nest form groups:
+TS:
+```
+ngOnInit() {
+    this.signupForm = new FormGroup({
+        'userData': new FormGroup({
+            'username': new FormControl(null, Validators.required),
+            'email': new FormControl(null, [Validators.required, Validators.email])
+        }),
+        'gender': new FormControl('male')
+    });
+}
+```
+HTML:
+```
+<div formGroupName="userData">
+    <div class="form-group">
+      <label for="username">Username</label>
+      <input
+        type="text"
+        id="username"
+        formControlName="username"
+        class="form-control">
+        <span
+            class="help-block"
+            *ngIf="!signupForm.get('userData.username').valid && signupForm.get('userData.username').touched">Please enter a valid username!</span>
+    </div>
+    <div class="form-group">
+      <label for="email">email</label>
+      <input
+        type="text"
+        id="email"
+        formControlName="email"
+        class="form-control">
+        <span
+            class="help-block"
+            *ngIf="!signupForm.get('userData.email').valid && signupForm.get('userData.email').touched">Please enter a valid email!</span>
+    </div>
+</div>
+```
+##### Arrays of form controls (reactive)
+
+* You can create an array of controls dynamically:
+HTML:
+```
+<div formArrayName="hobbies">
+    <h4>Your Hobbies</h4>
+    <button
+        class="btn btn-default"
+        type="button"
+        (click)="onAddHobby()">Add Hobby</button>
+        <div
+            class="form-group"
+            *ngFor="let hobbyControl of signupForm.get('hobbies').controls; let i = index">
+            <input type="text" class="form-control" [formControlName]="i">
+        </div>
+</div>
+```
+Typescript:
+```
+ngOnInit() {
+    this.signupForm = new FormGroup({
+        'userData': new FormGroup({
+            'username': new FormControl(null, Validators.required),
+            'email': new FormControl(null, [Validators.required, Validators.email])
+        }),
+        'gender': new FormControl('male'),
+        'hobbies': new FormArray([])
+    });
+}
+
+onAddHobby() {
+    const control = new FormControl(null, Validators.required);
+    (<FormArray>this.signupForm.get('hobbies')).push(control);
+}
+```
+You have to cast `(<FormArray>this.signupForm.get('hobbies')).push(control);` the array type so it knows it's an array
+
+##### Custom validators (reactive)
+
+* Custom validators can be good in specific cases, like if there is a certain username you don't want people to use
+* A validator is merely a method angular uses whenever you validate a control, and on change it will check that control
+* You have to create an array ` forbiddenUsernames = ['Chris', 'Anna'];`
+* If validation is succesful you have to pass nothing or null
+* Creating a custom form validator:
+```
+forbiddenNames(control: FormControl): {[s: string]: boolean} {
+    if (this.forbiddenUsernames.indexOf(control.value) !== -1) {
+        return {'nameIsForbidden': true};
+    }
+    return null;
+}
+```
+Then you add it in the form object `'username': new FormControl(null, [Validators.required, this.forbiddenNames.bind(this)]),` you have to bind `this`
+
+##### Using error codes (reactive)
+
+* Angular adds the error codes on the individual controls in the errors object
+* Error codes can be used to show the right error messages:
+```
+<span
+    class="help-block"
+    *ngIf="!signupForm.get('userData.username').valid && signupForm.get('userData.username').touched">
+        <span *ngIf="signupForm.get('userData.username').errors['nameIsForbidden']">This name is invalid!</span>
+        <span *ngIf="signupForm.get('userData.username').errors['required']">This field is required!</span>
+</span>
+```
+
+##### Custom Async Validators
+
+* Sometimes you need a validator which is able to wait for a response from the server before letting you know if it is valid or not
+* Setting up a async validator (timeout is to fake server fetch time):
+```
+forbiddenEmails(control: FormControl): Promise<any> | Observable<any> {
+    const promise = new Promise<any>((resolve, reject) => {
+        setTimeout(() => {
+            if (control.value === 'test@test.com') {
+                resolve({'emailIsForbidden': true});
+            } else {
+                resolve(null);
+            }
+        }, 1500)
+    });
+    return promise;
+}
+```
+In your form object `'email': new FormControl(null, [Validators.required, Validators.email], this.forbiddenEmails)` `this` needs to be binded if you plan to use it
+* While it is waiting to be validated the class `ng-pending` is added to the input
+
+##### Reacting to status or value changes
+
+* ValueChanges:
+```
+this.signupForm.valueChanges.subscribe(
+    (value) => console.log(value)
+);
+```
+* StatusChanges:
+```
+this.signupForm.statusChanges.subscribe(
+    (value) => console.log(value)
+);
+```
+* These hooks can be used to react more closely to what's happening in the form
+
+##### Setting and patch values (reactive)
+
+* Setting the values:
+```
+this.signupForm.setValue({
+    'userData': {
+        'username': 'max',
+        'email': 'max@test.com'
+    },
+    'gender': 'male',
+    'hobbies' : []
+});
+```
+* Setting a specific value:
+```
+this.signupForm.patchValue({
+    'userData': {
+        'username': 'max'
+    }
+});
+```
+* You can reset the whole form using ` this.signupForm.reset();` (can also hold specific inputs)
