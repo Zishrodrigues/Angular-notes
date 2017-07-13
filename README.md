@@ -1249,6 +1249,7 @@ onSubmit() {
 * Angular adds classes on input. `ng-valid ng-dirty ng-touched` these classes give us information about the state of the individual controls
 * https://angular.io/docs/ts/latest/api/forms/index/Validators-class.html are the built in validators that ship with angular
 * https://angular.io/api?type=directive See the needed directives
+* `pattern="^[1-9]+[0-9]*$"` (has to be number greater than 0)
 * You might want to enable HTML 5 validation, Angular enables it. You enable this by adding `ngNativeValidate` to a control in your HTML template
 
 * You can disable the submit button if the form is invalid by accessing the local reference:
@@ -1728,3 +1729,738 @@ this.signupForm.patchValue({
 });
 ```
 * You can reset the whole form using ` this.signupForm.reset();` (can also hold specific inputs)
+
+## Section 17: Pipes
+
+* Pipes are a feature built into Angular 2
+* Pipes allow you to transform output in your template
+* There are pipes for different types of output, and for sync and async data
+
+### A basic example of pipes
+
+* You have a username, that's a property in your component. It holds a string. You output a string using interpolation
+```
+username = 'Max'
+```
+```
+<p>{{ username }}</p>
+```
+* You decide that it would be nice if the string was only uppercase, but only when you output it (the property stays the same)
+* For this you can use the uppercase pipe(built in pipe):
+```
+<p>{{ username | uppercase }}</p>
+```
+The output would now be uppercase `MAX`
+
+* This is the main purpose of pipes, transforming values
+
+### Using pipes
+
+* The uppercase pipe makes text uppercase `{{ server.instanceType | uppercase}}`
+* You can change the date using the date pipe `{{ server.started | date}}`
+
+#### Configuring pipes (adding parameters)
+
+* You can configure pipes with parameters to change the output
+* `{{ server.started | date:'fullDate' }}` This changes the date format to a full Date
+* You add paremters with `:` for example `{{ server.started | date:'PARAMETER':'PARAMETER2' }}`
+
+#### Learning more about pipes
+
+* https://angular.io/api?query=pipe here you can see the pipes built into Angular
+
+#### Chaining/combining multiple pipes
+
+* You can chain pipes by putting a pipe `|` symbol between them `{{ server.started | date:'fullDate' | uppercase }}`
+* The order is important (eg: you can't uppercase a date before it's turned into a string by the date pipe)
+* Apply the pipes in the order you want to transform your output
+
+### Creating custom pipes
+
+* Create a file for the pipe `shorten.pipe.ts` using the naming convention
+* Import the PipeTransform interface:
+```
+import { PipeTransform, Pipe } from '@angular/core';
+
+@Pipe({
+    name: 'shorten'
+})
+export class ShortenPipe implements PipeTransform {
+    transform(value: any) {
+        if (value.length > 10) {
+            return value.substr(0, 10) + ' ...';
+        } return value;
+    }
+}
+```
+A pipe that returns the first 10 characters of a string, using the imported `@Pipe()` decorator you can name it and use it in your html template
+
+* Transform always needs to return something. A pipe is you put something in you put something out, thus the name Pipe
+* You need to add the pipe to your app.module:
+```
+import { ShortenPipe } from './shorten.pipe';
+```
+```
+@NgModule({
+  declarations: [
+    AppComponent,
+    ShortenPipe
+  ]
+```
+* Call the Pipe in your html `{{ server.name | shorten }}`
+
+##### Custom pipe with parameters
+
+* You can create a custom pipe with parameters that allow the user to specify the number of characters for example:
+```
+import { PipeTransform, Pipe } from '@angular/core';
+
+@Pipe({
+    name: 'shorten'
+})
+export class ShortenPipe implements PipeTransform {
+    transform(value: any, limit: number) {
+        if (value.length > limit) {
+            return value.substr(0, limit) + ' ...';
+        } return value;
+    }
+}
+```
+HTML:
+```
+{{ server.name | shorten:'20' }}
+```
+
+* You can add parameters by adding types in your transform method
+
+#### Advanced custom Pipe
+
+* `ng g p pipename` allows you to generate a pipe in the cli
+* A pipe which filters an array based on a string:
+```
+import { Pipe, PipeTransform } from '@angular/core';
+
+@Pipe({
+  name: 'filter'
+})
+export class FilterPipe implements PipeTransform {
+
+  transform(value: any, filterString: string, propName: string): any {
+    if (value.length === 0) {
+        return value;
+    }
+    const resultArray = [];
+    for (const item of value) {
+        if (item[propName] === filterString) {
+            resultArray.push(item);
+        }
+    }
+    return resultArray;
+  }
+}
+```
+In your html you filter based on input:
+```
+<input type="text" [(ngModel)]="filteredStatus">
+```
+```
+*ngFor="let server of servers | filter:filteredStatus:'status'"
+```
+* Pipes can be used on all output data, so also in the template loops
+
+### Pure and impure Pipes
+
+* Angular doesn't rerun the pipe whenever the data(objects / arrays) changes, this can cause issues in some cases
+* If you put pure to false, then the pipe gets rerun whenever data changes, be aware that this can cause performance issues as it reruns every time some data changes on the page
+```
+@Pipe({
+  name: 'filter',
+  pure: false
+})
+```
+The default is `pure: true`
+
+### Async Pipe
+
+* `async` pipe recognizes if something is a promise or an observable, and it print the data to the screen on change
+
+## Section 18: HTTP requests
+
+* We have a SPA so the HTTP requests happen through AJAX, so that we don't need a new page when receiving the JSON response
+
+### Sending requests (eg post request)
+
+* Your app module needs to have the Http module imported
+* Import Angular http `import { Http } from '@angular/http';` and `constructor(private http: Http) {}`
+* The request service:
+```
+import { Injectable } from '@angular/core';
+import { Http } from '@angular/http';
+
+@Injectable()
+export class ServerService {
+    constructor(private http: Http) {}
+    storeServers(servers: any[]) {
+        return this.http.post('https://udemy-ng-http-52335.firebaseio.com/', servers);
+    }
+}
+```
+At this point it's not sending a request yet
+
+* Angular Http creates an observable when you do a request, it won't send the request as long as there is no subscription to it
+* This calls the request service and logs the response:
+```
+onSave(){
+    this.serverService.storeServers(this.servers)
+      .subscribe(
+          (response) => console.log(response),
+          (error) => console.log(error)
+      );
+}
+```
+
+#### Adjusting request headers
+
+```
+storeServers(servers: any[]) {
+    const headers = new Headers({
+        'Content-Type': 'application/json'
+    });
+    return this.http.post('https://udemy-ng-http-52335.firebaseio.com/data.json', servers, {headers: headers});
+}
+```
+
+### GET Requests
+
+* In your request service:
+```
+getServers() {
+    return this.http.get('https://udemy-ng-http-52335.firebaseio.com/data.json');
+}
+```
+In the Typescript file:
+```
+onGet() {
+    this.serverService.getServers()
+      .subscribe(
+          (response: Response) => {
+              const data = response.json()
+              console.log(data);
+          },
+          (error) => console.log(error)
+      );
+}
+```
+The Angular Respons import let's you unwrap the data and make it into a Javascript Object
+
+### Transforming data with Observables
+
+* You can make sure the request service gets the data before sending it to the component
+Service:
+```
+getServers() {
+    return this.http.get('https://udemy-ng-http-52335.firebaseio.com/data.json')
+        .map(
+            (response: Response) => {
+                const data = response.json();
+                return data;
+            }
+        );
+}
+```
+Typescript:
+```
+onGet() {
+    this.serverService.getServers()
+      .subscribe(
+          (servers: any[]) => console.log(servers),
+          (error) => console.log(error)
+      );
+}
+```
+
+### Using the returned data
+
+* Adding something to the name of the servers after fetch:
+```
+getServers() {
+    return this.http.get('https://udemy-ng-http-52335.firebaseio.com/data.json')
+        .map(
+            (response: Response) => {
+                const data = response.json();
+                for (const server of data) {
+                    server.name = 'FETCHED_' + server.name;
+                }
+                return data;
+            }
+        );
+}
+```
+
+### Catching HTTP errors
+
+```
+getServers() {
+    return this.http.get('https://udemy-ng-http-52335.firebaseio.com/data')
+        .map(
+            (response: Response) => {
+                const data = response.json();
+                for (const server of data) {
+                    server.name = 'FETCHED_' + server.name;
+                }
+                return data;
+            }
+        )
+        .catch(
+            (error: Response) => {
+                console.log(error)
+                return Observable.throw(error);
+            }
+        );
+}
+```
+or `return Observable.throw('Something went wrong!');`
+
+### Async pipes with HTTP requests
+
+* You can connect a property `appName = this.serverService.getAppName();` to a request and use async pipe to update it `{{ appName | async }}`
+
+## Section 20: Authentication & Route protection (Oauth)
+
+* In a traditional web app the server is responsible for sending a complete html code to the client, in a SPA the client is responsible for making sure the HTML changes without receiving templates
+* In a traditional web app the session is stored on the server and the client gets a session cookie, which stores the id of the session, which can be sent with every request
+* In a SPA we send the Auth information to the server, but a session isn't stored. The server sends back a Token which is hashed with a secret, with this token the client can access protected resources on the server
+* More about the token https://jwt.io/introduction/
+
+
+## Section 21: Angular Modules & Optimizing apps
+
+* Your Angular app exists of Components, directives and services etc. All these have to be registered in a module or multiple modules
+* The idea behind this is that you tell angular what your app consists of; which components to you use, which directives/services
+* Angular doesn't automatically scan and add your files. This makes performance better because it doesn't use what you don't need
+* Modules bundle functionality and let you import them
+
+### The App module
+
+* An import on your module is a Typescript feature. Typscript needs to know where a specific thing (eg class) you use lives, it's for Typscript not Angular
+* Webpack will go through these imports and bundle all of them when building
+* Angular modules define how our app looks like to angular
+* When your App Module has tons of imports and declarations you can improve it by using multiple modules
+
+#### declarations array
+
+* In the declarations array we define which components, directives or pipes our app(this module) uses
+
+#### imports array
+
+* In imports we define which other modules does this module use. Here you also import built in modules like `BrowserModule` and `FormsModule`
+
+#### exports array
+
+* What you put in exports can be imported by another module to use
+* This includes all the directives etc
+* bundle of all the module functionality that you can import
+
+#### providers array
+
+* Everything we provide here will be provided for the whole application, which means you can use one instance for the behavior of the whole app
+
+#### bootstrap array
+
+* Here you define the root component, the main component where you start registering all the elements you use (usually app component)
+
+### Feature Modules (custom module)
+
+* A custom module could be a feature module, for a specific feature
+* When you use a module for a feature you can quickly see what the feature relies on, what it uses etc
+* Good enhancement from a code structuring perspective
+
+* Defining a module in `recipes.module.ts`
+```
+import { NgModule } from '@angular/core';
+
+@ngModule()
+export class RecipesModule {}
+```
+
+* In most cases you don't use a Service to a feature model because it's used throughout the app
+* Every feature module needs the CommonModule in imports, this gives you access to the common directives like ngClass, ngIf, and changes are high that you'll need some of those
+* The main module has the BrowserModule instead of CommonModule, BrowserModule has some stuff Angular needs on start up, only your main module should have this
+* You can't duplicate declarations in multiple modules
+* Router forRoot must only be called in the root/app module, otherwise use forChild
+```
+@NgModule({
+    imports: [
+        RouterModule.forChild(recipesRoutes)
+    ],
+    exports: [RouterModule]
+})
+```
+
+### Shared modules
+
+* A shared module is a module not containing a feature, but containing something that will be shared across multiple other modules
+* Since you can't import the same directive in multiple models, you can use a shared model
+```
+import { NgModule } from '@angular/core';
+
+import { DropdownDirective } from './dropdown.directive';
+
+@NgModule({
+    declarations: [
+        DropdownDirective
+    ],
+    exports: [
+        DropdownDirective
+    ]
+})
+export class SharedModule {}
+```
+
+### Modules and routing (lazy loading) / increase performance
+
+* You might not need the code for all your features if the user doesn't visit certain pages, lazy loading means that you can only load code when it is needed
+* The Module will only be loaded if you visit a route that can lead to that module
+* Removing the component from the main module and adding loadChildren to the route allows lazy loading `{ path: 'recipe', loadChildren: './recipes/recipe.module#RecipesModule'},`
+
+### Modules and Service Injection
+
+* Is you provide a Service on multiple modules that aren't lazy loaded, they will be combined by angular to a Root injector. Which creates one instance of that Service for those modules
+* A lazy loaded module can still use the same instance of a Service, but if it provides it's own Service in it's providors array it will get a new instance (child injector) of the Service
+* So whether you load a module lazily or not can change how many Instances of a Service you're going to use
+* You should avoid adding a Service to a shared module's providors array, this creates a child injector
+* Don't add providors on a shared module
+
+### Core module
+
+* Things that you really only need on start up can be added to a core module
+* The core module will only be imported by the app module, this keeps the app module cleaner
+* It's good to only have the AppComponent in your app module declarations, this means your modules are clean, the core module can import the other components you need
+
+### Using Ahead-of-time Compilation
+
+* Angular compiles your HTML templates to Javascript
+* Angular offers two types of compiling your code
+
+#### Just-in-time compilation
+
+* Here you develop your code -> then ship it(gets compiled) -> app downloaded to browser -> Angular bootstraps the app (in this step it parses and compiles the templates to JS)
+
+#### Ahead-in-time compilation
+
+* Here you develop your code -> Then Angular parses and compiles templates to JS -> ship it to production/compile -> download to browser
+* The advantages to this is that the app starts faster, in browser compiling isn't needing
+* Templates get checked during development, or right after (errors you'd see in your js console are now seen in your build process)
+* Smaller file size as unused Features can be stripped out and the compiler itself isn't shipped
+
+* Build for production: `ng build --prod`
+* Build for production and ahead of time compilation: `ng build --prod --aot`
+* The dist folder is created once you run ng build (main file = app code)
+
+### preloading lazy loading
+
+* Because lazy loading loads the component when you go to the route you might have a second where the app hangs because it's loading
+* You can avoid this by preloading while the user is on the app
+* To preload all your lazy modules after the app has been loaded, add it in the route module imports:
+```
+import { Routes, RouterModule, PreloadAllModules } from '@angular/router';
+```
+```
+@NgModule({
+  imports: [RouterModule.forRoot(appRoutes, {preloadingStrategy: PreloadAllModules})],
+  exports: [RouterModule]
+})
+```
+
+## Section 22: Deployment
+
+### Deployment preparations and Important steps
+
+1. Build the app for Production (minify the code, consider AoT compliation) `ng build --prod --aot` with CLI
+2. Set the correct <base> element if on a after hash url eg: `example.com/my-app` you should have <base href="/my-app/">
+3. Make sure your Servers always returns index.html, return index.html in case of 404 errors (angular handles the routes, not the server)
+
+* You can deploy the files in your `dist` folder
+
+## Section 23: Angular Animations
+
+* Angular ships with it's own animation system (attaching/detaching animations etc)
+* In the component decorator you define the animations that component should be aware of:
+```
+@Component({
+  selector: 'app-root',
+  templateUrl: './app.component.html',
+  animations: [
+
+  ]
+})
+```
+
+* Angular animations work from transitioning from state 1 to state 2
+
+#### trigger
+
+* With trigger() `import { trigger, state, style, transition, animate } from '@angular/animations';` we tell angular that certain elements that can be placed in our DOM, if they are placed, it should trigger a certain animation
+HTML:
+```
+<button class="btn btn-primary" (click)="onAnimate()">Animate!</button>
+<div [@divState]="state"></div>
+```
+TS:
+```
+@Component({
+  selector: 'app-root',
+  templateUrl: './app.component.html',
+  animations: [
+      trigger('divState', [
+          state('normal', style({
+              'background-color': 'red',
+              transform: 'translateX(0)'
+          })),
+          state('highlighted', style({
+              'background-color': 'blue',
+              transform: 'translateX(100px)'
+          })),
+          transition('normal => highlighted', animate(300)),
+          transition('highlighted => normal', animate(500)),
+      ])
+  ]
+})
+```
+The state() represents the first state and the second state, the transition defines how to animate it
+```
+onAnimate() {
+    this.state == 'normal' ? this.state = 'highlighted' : this.state = 'normal';
+}
+```
+the on click method that will change the state and trigger the animation
+
+* `transition('normal <=> highlighted', animate(300))` let's you use the same timing
+* More complex trigger:
+```
+trigger('wildState', [
+    state('normal', style({
+        'background-color': 'red',
+        transform: 'translateX(0) scale(1)'
+    })),
+    state('highlighted', style({
+        'background-color': 'blue',
+        transform: 'translateX(100px) scale(1)'
+    })),
+    state('shrunken', style({
+        'background-color': 'green',
+        transform: 'translateX(0) scale(0.5)'
+    })),
+    transition('normal => highlighted', animate(300)),
+    transition('highlighted => normal', animate(500)),
+    transition('shrunken <=> *', [
+        style({
+            'background-color': 'orange'
+        }),
+        animate(1000, style({
+            borderRadius: '50px'
+        })),
+        animate(500)
+    ])
+])
+```
+* The `[@wildState]="wildState"` defines what animation is played
+* You can give a transition an array with the different states in the transition to finetune it
+
+### Void state
+
+* `void` is a reserved state by Angular which represents an element which wasn't added to the DOM in before the animations
+```
+[@list1]
+```
+```
+trigger('list1', [
+    state('in', style({
+        opacity: 1,
+        transform: 'translateX(0)'
+    })),
+    transition('void <=> *', [
+        style({
+            opacity: 0,
+            transform: 'translateX(-100px)'
+        }),
+        animate(300)
+    ])
+])
+```
+The style in the transition is the first state after the void adds the element to the html, it will then animate to the final state
+
+### Animation keyframes
+
+```
+import { trigger, state, style, transition, animate } from '@angular/animations';
+```
+```
+transition('void => *', [
+    animate(300, keyframes([
+    style({
+        opacity: 0,
+        transform: 'translateX(-100px)',
+        offset: 0
+    }),
+    style({
+        opacity: 0.5,
+        transform: 'translateX(-50px)',
+        offset: 0.7
+    }),
+    style({
+        opacity: 1,
+        transform: 'translateX(0)',
+        offset: 1
+    }),
+    ]))
+])
+```
+
+### Group animations
+
+* With the group method (needs to be imported) you can pass an array of animations you want to perform in sync (at the same time)
+
+### Animation callbacks
+
+* Using animation callbacks you can execute a method when an animation starts or is done
+* `(@divState.start)="animationStarted()"` this method will get executed when the animation starts
+* `(@divState.done)="animationDone()"` this method will get executed when the animation starts
+
+## Section 24: Unit testing in angular
+
+* Unit testing allows you to test specific elements of the Angular app (components, pipes, services)
+* Analyze code behavior for expected and unexpected behavior
+* `import { TestBed, async } from '@angular/core/testing';` testing package
+* This code is ran before each individual test:
+```
+beforeEach(() => {
+  TestBed.configureTestingModule({
+    declarations: [
+      AppComponent
+    ],
+  });
+});
+```
+This is which code you want to have in each testing environment:
+```
+it('should create the app', async(() => {
+  let fixture = TestBed.createComponent(AppComponent);
+  let app = fixture.debugElement.componentInstance;
+  expect(app).toBeTruthy();
+}));
+```
+* `fixture` holds the component you create in the Testbed
+* `it` should create the app and then we `expect` something when it is done, like the app exists
+
+* You can use testing packages like `jasmine`
+* with the cli you can use `ng test` to start up the testing environments
+
+### Isolated vs non isolated testing
+
+* You can test things isolated, like a pipe. Then you test it by itself and independant of Angular
+
+### More on testing
+
+* https://angular.io/docs/ts/latest/guide/testing.html
+* https://semaphoreci.com/community/tutorials/testing-components-in-angular-2-with-jasmine
+* https://github.com/angular/angular-cli#running-unit-tests
+* https://github.com/angular/angular-cli#running-end-to-end-tests
+
+## Section 28: Typescript
+
+* Typescript is a Javascript superset
+* You can assign types to variables and properties, this reduces your chance to make errors by assigning the wrong types for example
+* You can create classes, use interfaces, generic types and modules
+
+### Types
+
+* types is the core of Typescript
+* If you assign a string to a variable it will automatically refer a type
+
+```
+let myString: string;
+
+myString = 'This is a string'; // This is ok
+myString = 7; // This gives an error
+```
+* Basic types:
+```
+let aString: string;
+let aNumber: number;
+let aBoolean: boolean;
+let anArray: Array<string>; // This is a generic type => May only hold 'strings' in this case
+let anything: any; // Any can be used if we don't know the actual type => Use it rarely!
+// We also got void (=> nothing) and enums (a set of numeric values)
+```
+
+### Classes
+
+```
+// How to create a class
+
+class Car {
+    engineName: string;
+    gears: number;
+    private speed: number; // private properties can't be accessed from outside the class
+
+    constructor(speed: number) {
+        this.speed = speed || 0;
+    }
+
+    accelerate(): void {
+        this.speed++;
+    }
+
+    throttle():void {
+        this.speed--;
+    }
+
+    getSpeed():void {
+        console.log(this.speed);
+    }
+
+    static numberOfWheels(): number {
+        return 4;
+    }
+}
+
+// Instantiate (create) an object from a class
+
+let car = new Car(5);
+car.accelerate();
+car.getSpeed();
+
+console.log(Car.numberOfWheels());
+```
+
+### Interfaces
+
+* An Interface is like a contract (whatever implements this interace, must have these properties)
+* Interfaces allow us to create a secure form of communication between objects
+
+### Generics
+
+```
+let numberArray: Array<number>; // This array will only accept numbers
+
+// Try to initialize it with strings
+
+// numberArray = ['test']; // => Error
+numberArray = [1,2,3];
+```
+
+### Modules
+
+* With modules you can tell Typescript that a certain class can be used outside of it's own file, inside other files
+
+```
+export class ExportedClass {
+    // This class is exported
+}
+```
+
+### More on Typescript
+
+*  http://www.typescriptlang.org/Handbook
+* https://www.udemy.com/typescript/
